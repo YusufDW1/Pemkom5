@@ -33,7 +33,6 @@ public class Client {
             dos.writeUTF("REGISTER:" + name);
             dos.flush();
 
-            // Receiver thread
             new Thread(() -> {
                 try {
                     while (true) {
@@ -44,7 +43,23 @@ public class Client {
                             String[] parts = msg.split(":", 3);
                             String fileName = parts[1];
                             long fileSize = Long.parseLong(parts[2]);
-                            receiveFile(dis, fileName, fileSize);
+                            System.out.println("Menerima file: " + fileName + " (" + fileSize + " bytes)");
+
+                            String userHome = System.getProperty("user.home");
+                            File downloads = new File(userHome, "Downloads");
+                            if (!downloads.exists()) downloads.mkdirs();
+                            File outFile = new File(downloads, fileName);
+                            try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                                byte[] buffer = new byte[4096];
+                                long remaining = fileSize;
+                                while (remaining > 0) {
+                                    int read = dis.read(buffer, 0, (int)Math.min(buffer.length, remaining));
+                                    if (read == -1) break;
+                                    fos.write(buffer, 0, read);
+                                    remaining -= read;
+                                }
+                            }
+                            System.out.println("File disimpan di: " + outFile.getAbsolutePath());
                         }
                     }
                 } catch (Exception e) {
@@ -52,13 +67,11 @@ public class Client {
                 }
             }).start();
 
-            // Tunggu READY
             String regResp = cmdQueue.take();
             System.out.println("Server: " + regResp);
 
-            // Command loop
             while (true) {
-                System.out.println("\nPerintah: LIST, SEND <target> <path>, EXIT");
+                System.out.println("Perintah: LIST, SEND <target> <path>, EXIT");
                 System.out.print("Masukkan perintah: ");
                 String input = scanner.nextLine().trim();
 
@@ -68,7 +81,6 @@ public class Client {
                     String listResp = cmdQueue.take();
                     if (listResp.startsWith("LIST:")) listResp = listResp.substring(5);
                     System.out.println("Client online: " + listResp);
-
                 } else if (input.toUpperCase().startsWith("SEND ")) {
                     String[] parts = input.split(" ", 3);
                     if (parts.length < 3) {
@@ -81,72 +93,35 @@ public class Client {
                         System.out.println("File tidak ditemukan: " + parts[2]);
                         continue;
                     }
-                    sendFile(dos, file, target);
+                    if (file.length() > 200 * 1024 * 1024) {
+                        System.out.println("File lebih besar dari 200MB, tidak bisa dikirim.");
+                        continue;
+                    }
+                    dos.writeUTF("SEND:" + target + ":" + file.getName() + ":" + file.length());
+                    dos.flush();
+
+                    try (FileInputStream fis = new FileInputStream(file)) {
+                        byte[] buffer = new byte[4096];
+                        int r;
+                        while ((r = fis.read(buffer)) != -1) {
+                            dos.write(buffer, 0, r);
+                        }
+                        dos.flush();
+                    }
                     String ack = cmdQueue.take();
                     System.out.println("Server: " + ack);
-
                 } else if (input.equalsIgnoreCase("EXIT")) {
                     dos.writeUTF("EXIT:" + name);
                     dos.flush();
                     break;
-
                 } else {
                     System.out.println("Perintah tidak dikenali.");
                 }
             }
 
             System.out.println("Client berhenti.");
-
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    private static void sendFile(DataOutputStream dos, File file, String target) throws IOException {
-        dos.writeUTF("SEND:" + target + ":" + file.getName() + ":" + file.length());
-        dos.flush();
-
-        try (FileInputStream fis = new FileInputStream(file)) {
-            byte[] buf = new byte[4096];
-            long total = 0;
-            int r;
-            while ((r = fis.read(buf)) != -1) {
-                dos.write(buf, 0, r);
-                total += r;
-                showProgress(total, file.length(), "Uploading");
-            }
-            dos.flush();
-        }
-        System.out.println();
-    }
-
-    private static void receiveFile(DataInputStream dis, String fileName, long fileSize) throws IOException {
-        File downloads = new File(System.getProperty("user.home"), "Downloads");
-        if (!downloads.exists()) downloads.mkdirs();
-        File outFile = new File(downloads, fileName);
-        try (FileOutputStream fos = new FileOutputStream(outFile)) {
-            byte[] buffer = new byte[4096];
-            long received = 0;
-            while (received < fileSize) {
-                int r = dis.read(buffer, 0, (int) Math.min(buffer.length, fileSize - received));
-                if (r == -1) throw new EOFException("File transfer ended unexpectedly");
-                fos.write(buffer, 0, r);
-                received += r;
-                showProgress(received, fileSize, "Downloading");
-            }
-        }
-        System.out.println("\nFile diterima di: " + outFile.getAbsolutePath());
-    }
-
-    private static void showProgress(long current, long total, String action) {
-        int percent = (int) ((current * 100) / total);
-        int progress = percent / 5;
-        StringBuilder bar = new StringBuilder("[");
-        for (int i = 0; i < 20; i++) {
-            if (i < progress) bar.append("#");
-            else bar.append(".");
-        }
-        bar.append("] ").append(percent).append("% ").append(action);
-        System.out.print("\r" + bar);
     }
 }
