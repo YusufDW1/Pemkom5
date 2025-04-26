@@ -12,17 +12,14 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.*;
-import javax.swing.*;
 
 public class Client {
     public static void main(String[] args) throws InterruptedException {
         Scanner scanner = new Scanner(System.in);
         
-        // Meminta input IP server dari pengguna
         System.out.print("IP Server: ");
         String serverIP = scanner.nextLine().trim();
 
-        // Validasi IP server
         while (!isValidIP(serverIP)) {
             System.out.println("IP tidak valid. Silakan coba lagi.");
             System.out.print("IP Server: ");
@@ -34,17 +31,15 @@ public class Client {
 
         while (true) {
             try (
-                Socket socket = new Socket(serverIP, 5000); // Gunakan IP yang dimasukkan pengguna
+                Socket socket = new Socket(serverIP, 5000);
                 DataInputStream dis = new DataInputStream(socket.getInputStream());
                 DataOutputStream dos = new DataOutputStream(socket.getOutputStream())
             ) {
                 BlockingQueue<String> cmdQueue = new ArrayBlockingQueue<>(10);
 
-                // Registrasi ke server
                 dos.writeUTF("REGISTER:" + name);
                 dos.flush();
 
-                // Thread receiver untuk menerima file
                 new Thread(() -> {
                     try {
                         while (true) {
@@ -56,7 +51,6 @@ public class Client {
                                 String fileName = parts[1];
                                 long fileSize = Long.parseLong(parts[2]);
 
-                                // Menerima file dengan progress
                                 receiveFile(dis, fileName, fileSize);
                             }
                         }
@@ -65,11 +59,9 @@ public class Client {
                     }
                 }).start();
 
-                // Tunggu registrasi sukses
                 String regResp = cmdQueue.take();
                 System.out.println("Server: " + regResp);
 
-                // Main loop untuk command
                 while (true) {
                     System.out.println("Perintah: LIST, SEND <target> <path>, SEND_MULTI <target> <filePaths>, EXIT");
                     System.out.print("Masukkan perintah: ");
@@ -103,18 +95,16 @@ public class Client {
 
             } catch (IOException e) {
                 System.out.println("Tidak bisa terhubung ke server. Mencoba lagi...");
-                try { Thread.sleep(5000); } catch (InterruptedException ignored) {} // Delay before reconnecting
+                try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
             }
         }
     }
 
-    // Fungsi untuk memvalidasi format IP
     private static boolean isValidIP(String ip) {
         String regex = "^([0-9]{1,3}\\.){3}[0-9]{1,3}$";
         return ip.matches(regex);
     }
 
-    // Kirim file tunggal
     private static void sendFile(DataOutputStream dos, BlockingQueue<String> cmdQueue, String[] parts) throws IOException, InterruptedException {
         if (parts.length < 3) {
             System.out.println("Format: SEND <target> <path>");
@@ -136,7 +126,6 @@ public class Client {
         dos.writeUTF("SEND:" + target + ":" + file.getName() + ":" + file.length());
         dos.flush();
 
-        // Kirim file dengan progress
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] buffer = new byte[4096];
             int bytesRead;
@@ -147,7 +136,6 @@ public class Client {
                 dos.write(buffer, 0, bytesRead);
                 bytesSent += bytesRead;
 
-                // Update progress bar
                 int progress = (int) ((bytesSent * 100) / totalBytes);
                 System.out.print("\rKirim file: " + progress + "%");
             }
@@ -158,7 +146,6 @@ public class Client {
         System.out.println("\nServer: " + ack);
     }
 
-    // Kirim beberapa file
     private static void sendMultipleFiles(DataOutputStream dos, BlockingQueue<String> cmdQueue, String[] parts) throws IOException, InterruptedException {
         if (parts.length < 3) {
             System.out.println("Format: SEND_MULTI <target> <filePaths>");
@@ -183,7 +170,6 @@ public class Client {
             dos.writeUTF("SEND:" + target + ":" + file.getName() + ":" + file.length());
             dos.flush();
 
-            // Kirim file dengan progress
             try (FileInputStream fis = new FileInputStream(file)) {
                 byte[] buffer = new byte[4096];
                 int bytesRead;
@@ -194,7 +180,6 @@ public class Client {
                     dos.write(buffer, 0, bytesRead);
                     bytesSent += bytesRead;
 
-                    // Update progress bar
                     int progress = (int) ((bytesSent * 100) / totalBytes);
                     System.out.print("\rKirim file: " + progress + "%");
                 }
@@ -206,7 +191,6 @@ public class Client {
         }
     }
 
-    // Terima file dengan progress bar
     private static void receiveFile(DataInputStream dis, String fileName, long fileSize) throws IOException {
         String userHome = System.getProperty("user.home");
         File downloads = new File(userHome, "Downloads");
@@ -225,7 +209,6 @@ public class Client {
                 bytesReceived += read;
                 remaining -= read;
 
-                // Update progress
                 int progress = (int) ((bytesReceived * 100) / fileSize);
                 System.out.print("\rMenerima file: " + progress + "%");
             }

@@ -43,7 +43,7 @@ public class Server {
                 }
             }
         }
-        return "127.0.0.1"; // fallback
+        return "127.0.0.1";
     }
 }
 
@@ -60,7 +60,6 @@ class ClientHandler implements Runnable {
         try (DataInputStream dis = new DataInputStream(socket.getInputStream());
              DataOutputStream dos = new DataOutputStream(socket.getOutputStream())) {
 
-            // 1) Registrasi
             String reg = dis.readUTF();
             if (reg.startsWith("REGISTER:")) {
                 clientName = reg.substring("REGISTER:".length());
@@ -72,7 +71,6 @@ class ClientHandler implements Runnable {
                 return;
             }
 
-            // 2) Loop menerima command
             while (true) {
                 String cmd;
                 try {
@@ -90,7 +88,7 @@ class ClientHandler implements Runnable {
                     String fileName = parts[2];
                     long fileSize = Long.parseLong(parts[3]);
 
-                    if (fileSize > 200 * 1024 * 1024) { // >200MB
+                    if (fileSize > 200 * 1024 * 1024) {
                         dos.writeUTF("CMDR:ERROR:File too big (max 200MB)");
                         continue;
                     }
@@ -101,11 +99,9 @@ class ClientHandler implements Runnable {
                         continue;
                     }
 
-                    // Kirim metadata ke target
                     try (DataOutputStream targetDos = new DataOutputStream(targetSocket.getOutputStream())) {
                         targetDos.writeUTF("FILE_META:" + fileName + ":" + fileSize);
 
-                        // Terima file dari pengirim
                         byte[] buffer = new byte[4096];
                         long remaining = fileSize;
                         OutputStream targetOut = targetSocket.getOutputStream();
